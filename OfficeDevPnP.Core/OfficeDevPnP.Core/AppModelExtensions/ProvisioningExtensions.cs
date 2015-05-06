@@ -11,7 +11,7 @@ namespace Microsoft.SharePoint.Client
     /// <summary>
     /// File-based (CAML) provisioning extensions
     /// </summary>
-    public static class ProvisioningExtensions
+    public static partial class ProvisioningExtensions
     {
         const string SharePointNamespaceName = "http://schemas.microsoft.com/sharepoint/";
 
@@ -23,9 +23,9 @@ namespace Microsoft.SharePoint.Client
         public static void ProvisionElementFile(this Web web, string path)
         {
             if (path == null) { throw new ArgumentNullException("path"); }
-            if (string.IsNullOrWhiteSpace(path)) { throw new ArgumentException("Path to the element file is required", "path"); }
+            if (string.IsNullOrWhiteSpace(path)) { throw new ArgumentException(CoreResources.ProvisioningExtensions_ProvisionElementFile_Path_to_the_element_file_is_required, "path"); }
 
-            LoggingUtility.Internal.TraceInformation((int)EventId.ProvisionElementFile, CoreResources.ProvisioningExtensions_ProvisionElementFile0, path);
+            Log.Info(Constants.LOGGING_SOURCE, CoreResources.ProvisioningExtensions_ProvisionElementFile0, path);
 
             var baseFolder = Path.GetDirectoryName(path);
             using (var sr = System.IO.File.OpenText(path))
@@ -48,7 +48,7 @@ namespace Microsoft.SharePoint.Client
             if (elementsXml == null) { throw new ArgumentNullException("elementsXml"); }
             if (elementsXml.Name != XName.Get("Elements", SharePointNamespaceName))
             {
-                throw new ArgumentException("Expected element 'Elements'.", "xml");
+                throw new ArgumentException(CoreResources.ProvisioningExtensions_ProvisionElementXml_Expected_element__Elements__, "xml");
             }
 
             foreach (var child in elementsXml.Elements())
@@ -72,7 +72,7 @@ namespace Microsoft.SharePoint.Client
             if (moduleXml == null) { throw new ArgumentNullException("module"); }
             if (moduleXml.Name != XName.Get("Module", SharePointNamespaceName))
             {
-                throw new ArgumentException("Expected element 'Module'.", "module");
+                throw new ArgumentException(CoreResources.ProvisioningExtensions_ProvisionModuleInternal_Expected_element__Module__, "module");
             }
 
             var name = moduleXml.Attribute("Name").Value;
@@ -80,7 +80,7 @@ namespace Microsoft.SharePoint.Client
             var modulePath = moduleXml.Attribute("Path").Value;
             var moduleBaseFolder = Path.Combine(baseFolder, modulePath);
 
-            LoggingUtility.Internal.TraceVerbose("Provisioning module '{0}'", name);
+            Log.Debug(Constants.LOGGING_SOURCE, "Provisioning module '{0}'", name);
 
             foreach (var child in moduleXml.Elements())
             {
@@ -93,7 +93,7 @@ namespace Microsoft.SharePoint.Client
                     }
                     catch (Exception ex)
                     {
-                        LoggingUtility.Internal.TraceError((int)EventId.ProvisionModuleFileError, ex, CoreResources.ProvisioningExtensions_ErrorProvisioningModule0File1, name, filePath);
+                        Log.Error(Constants.LOGGING_SOURCE, CoreResources.ProvisioningExtensions_ErrorProvisioningModule0File1, name, filePath, ex.Message);
                     }
                 }
                 else
@@ -112,7 +112,7 @@ namespace Microsoft.SharePoint.Client
             if (fileXml == null) { throw new ArgumentNullException("fileXml"); }
             if (fileXml.Name != XName.Get("File", SharePointNamespaceName))
             {
-                throw new ArgumentException("Expected element 'File'.", "file");
+                throw new ArgumentException(CoreResources.ProvisioningExtensions_ProvisionFileInternal_Expected_element__File__, "file");
             }
 
             var fileUrl = fileXml.Attribute("Url").Value;
@@ -137,7 +137,7 @@ namespace Microsoft.SharePoint.Client
                     var propertyName = child.Attribute("Name").Value;
                     if (skipProperties.Contains(propertyName, StringComparer.OrdinalIgnoreCase))
                     {
-                        LoggingUtility.Internal.TraceVerbose("Skipping property known to cause issues '{0}'", propertyName);
+                        Log.Debug(Constants.LOGGING_SOURCE, "Skipping property known to cause issues '{0}'", propertyName);
                         //Console.WriteLine("Skipping property '{0}'", propertyName);
                     }
                     else

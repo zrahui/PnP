@@ -8,7 +8,7 @@ namespace OfficeDevPnP.PowerShell.Commands.Base
 {
     [Cmdlet("Connect", "SPOnline", SupportsShouldProcess = false)]
     [CmdletHelp("Connects to a SharePoint site and creates an in-memory context",
-       DetailedDescription = "If no credentials have been specified, and the CurrentCredentials parameter has not been specified, you will be prompted for credentials.")]
+       DetailedDescription = "If no credentials have been specified, and the CurrentCredentials parameter has not been specified, you will be prompted for credentials.", Category = "Base Cmdlets")]
     [CmdletExample(
         Code = @"PS:> Connect-SPOnline -Url https://yourtenant.sharepoint.com -Credentials (Get-Credential)",
         Remarks = @"This will prompt for username and password and creates a context for the other PowerShell commands to use.
@@ -59,9 +59,6 @@ namespace OfficeDevPnP.PowerShell.Commands.Base
 
         protected override void ProcessRecord()
         {
-            // Turn off OfficeDev.PnP.Core logging to console for powershell commands
-            LoggingUtility.Internal.Source.Listeners.Clear();
-            
             PSCredential creds = null;
             if (Credentials != null)
             {

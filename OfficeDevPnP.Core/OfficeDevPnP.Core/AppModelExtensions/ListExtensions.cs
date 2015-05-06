@@ -10,6 +10,7 @@ using OfficeDevPnP.Core;
 using OfficeDevPnP.Core.Entities;
 using OfficeDevPnP.Core.Enums;
 using OfficeDevPnP.Core.Utilities;
+using Microsoft.SharePoint.Client.WebParts;
 
 namespace Microsoft.SharePoint.Client
 {
@@ -212,7 +213,7 @@ namespace Microsoft.SharePoint.Client
             }
             else
             {
-                return null;
+                return defaultValue;
             }
         }
 
@@ -343,6 +344,34 @@ namespace Microsoft.SharePoint.Client
         }
 
         /// <summary>
+        /// Checks if list exists on the particular site based on the list id property.
+        /// </summary>
+        /// <param name="web">Site to be processed - can be root web or sub site</param>
+        /// <param name="id">The id of the list to be checked.</param>
+        /// <exception cref="System.ArgumentException">Thrown when listTitle is a zero-length string or contains only white space</exception>
+        /// <exception cref="System.ArgumentNullException">listTitle is null</exception>
+        /// <returns>True if the list exists</returns>
+        public static bool ListExists(this Web web, Guid id)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new ArgumentException("id");
+            }
+
+            ListCollection lists = web.Lists;
+            IEnumerable<List> results = web.Context.LoadQuery<List>(lists.Where(list => list.Id == id));
+            web.Context.ExecuteQueryRetry();
+            List existingList = results.FirstOrDefault();
+
+            if (existingList != null)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Adds a default list to a site
         /// </summary>
         /// <param name="web">Site to be processed - can be root web or sub site</param>
@@ -377,7 +406,7 @@ namespace Microsoft.SharePoint.Client
 
         private static List CreateListInternal(this Web web, Guid? templateFeatureId, int templateType, string listName, bool enableVersioning, bool updateAndExecuteQuery = true, string urlPath = "", bool enableContentTypes = false)
         {
-            LoggingUtility.Internal.TraceInformation((int)EventId.CreateList, CoreResources.ListExtensions_CreateList0Template12, listName, templateType, templateFeatureId.HasValue ? " (feature " + templateFeatureId.Value.ToString() + ")" : "");
+            Log.Info(CoreResources.ListExtensions_CreateList0Template12, listName, templateType, templateFeatureId.HasValue ? " (feature " + templateFeatureId.Value.ToString() + ")" : "");
 
             ListCollection listCol = web.Lists;
             ListCreationInformation lci = new ListCreationInformation();
@@ -513,6 +542,37 @@ namespace Microsoft.SharePoint.Client
             taxField.Update();
 
             web.Context.ExecuteQueryRetry();
+        }
+
+        /// <summary>
+        /// Sets JS link customization for a list form
+        /// </summary>
+        /// <param name="list">SharePoint list</param>
+        /// <param name="pageType">Type of form</param>
+        /// <param name="jslink">JSLink to set to the form. Set to empty string to remove the set JSLink customization.
+        /// Specify multiple values separated by pipe symbol. For e.g.: ~sitecollection/_catalogs/masterpage/jquery-2.1.0.min.js|~sitecollection/_catalogs/masterpage/custom.js
+        /// </param>
+        public static void SetJSLinkCustomizations(this List list, PageType pageType, string jslink)
+        {
+            // Get the list form to apply the JS link
+            Form listForm = list.Forms.GetByPageType(pageType);
+            list.Context.Load(listForm, nf => nf.ServerRelativeUrl);
+            list.Context.ExecuteQueryRetry();
+
+            Microsoft.SharePoint.Client.File file = list.ParentWeb.GetFileByServerRelativeUrl(listForm.ServerRelativeUrl);
+            LimitedWebPartManager wpm = file.GetLimitedWebPartManager(PersonalizationScope.Shared);
+            list.Context.Load(wpm.WebParts, wps => wps.Include(wp => wp.WebPart.Title));
+            list.Context.ExecuteQueryRetry();
+
+            // Set the JS link for all web parts
+            foreach (WebPartDefinition wpd in wpm.WebParts)
+            {
+                WebPart wp = wpd.WebPart;
+                wp.Properties["JSLink"] = jslink;
+                wpd.SaveWebPartChanges();
+
+                list.Context.ExecuteQueryRetry();
+            }
         }
 
 #if !CLIENTSDKV15
@@ -1049,7 +1109,11 @@ namespace Microsoft.SharePoint.Client
                         EventReceiverDefinitionCreationInformation eventCi = new EventReceiverDefinitionCreationInformation();
                         eventCi.Synchronization = EventReceiverSynchronization.DefaultSynchronization;
                         eventCi.EventType = EventReceiverType.ItemAdded;
+#if !CLIENTSDKV15
+                        eventCi.ReceiverAssembly = "Microsoft.Office.DocumentManagement, Version=16.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c";
+#else
                         eventCi.ReceiverAssembly = "Microsoft.Office.DocumentManagement, Version=15.0.0.0, Culture=neutral, PublicKeyToken=71e9bce111e9429c";
+#endif
                         eventCi.ReceiverClass = "Microsoft.Office.DocumentManagement.LocationBasedMetadataDefaultsReceiver";
                         eventCi.ReceiverName = "LocationBasedMetadataDefaultsReceiver ItemAdded";
                         eventCi.SequenceNumber = 1000;

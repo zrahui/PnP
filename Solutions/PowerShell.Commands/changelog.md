@@ -1,5 +1,31 @@
 # OfficeDevPnP.PowerShell Changelog #
 
+**2015-04-24**
+* Updated Get-SPOProvisioningTemplate and Apply-SPOProvisioningTemplate to show a progress bar
+* Updated GEt-SPOProvisioningTemplate with optional switches to export either Site Collection Term Group (if available) or all Term Groups in the default site collection termstore.
+* Added Export-SPOTermGroup cmdlet that supports the provisioning engine XML format
+* Added Import-SPOTermGroup cmdlet that supports the provisioning engine XML format
+
+**2015-04-20**
+* Admin cmdlets: Get-SPOTenantSite, New-SPOTenantSite, Remove-SPOTenantSite, Set-SPOTenantSite and Get-SPOWebTemplates now automatically switch context. This means that you don't have to connect to https://<tenant>-admin.sharepoint.com first in order to execute them.
+**2015-04-08**
+* Added Apply-SPOProvisioningTemplate cmdlet
+* Added Get-SPOPRovisioningTemplate cmdlet
+* Extended Enable-SPOFeature cmdlet to handle Sandboxed features
+
+**2015-03-11**
+* Added Get-SPOJavaScript link cmdlet
+* Refactored JavaScript related cmdlets to use -Name parameter instead of -Key (-Key still works for backwards compatibility reasons)
+* Refactored JavaScript related cmdlets to use -Scope [Web|Site] parameter instead of -FromSite, -SiteScoped and -AddToSite parameters. The old parameters still work for backwards compatibility reasons.
+* Fixed an issue in cmdlet help generation where the syntax would not be shown for cmdlets with only one parameter set.
+
+**2015-03-10**
+* Added Sequence parameter to Add-SPOJavaScriptLink and Add-SPOJavaScriptBlock cmdlets
+* Added Remove-SPOFile cmdlet
+
+**2015-02-25**
+* Updated Location parameter in Add-/Remove-SPONavigationNode
+
 **2015-01-07**
 * Introduced new Cmdlet: Get-SPOWebPartProperty to return webpart properties
 * Updated Set-SPOWebPartProperty cmdlet to support int values

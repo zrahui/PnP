@@ -7,7 +7,7 @@ namespace OfficeDevPnP.PowerShell.Commands
 {
 
     [Cmdlet(VerbsCommon.Set, "SPODefaultContentTypeToList")]
-    [CmdletHelp("Sets the default content type for a list")]
+    [CmdletHelp("Sets the default content type for a list", Category = "Content Types")]
     [CmdletExample(
      Code = @"PS:> Set-SPODefaultContentTypeToList -List ""Project Documents"" -ContentType ""Project""",
      Remarks = @"This will set the Project content type (which has already been added to a list) as the default content type", SortOrder = 1)]
@@ -28,11 +28,11 @@ namespace OfficeDevPnP.PowerShell.Commands
             {
                 if (ContentType.Id != null)
                 {
-                    ct = SelectedWeb.GetContentTypeById(ContentType.Id);
+                    ct = SelectedWeb.GetContentTypeById(ContentType.Id,true);
                 }
                 else if (ContentType.Name != null)
                 {
-                    ct = SelectedWeb.GetContentTypeByName(ContentType.Name);
+                    ct = SelectedWeb.GetContentTypeByName(ContentType.Name,true);
                 }
             }
             else
