@@ -11,13 +11,13 @@ using File = Microsoft.SharePoint.Client.File;
 
 namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 {
-    public class ObjectFiles : ObjectHandlerBase
+    internal class ObjectFiles : ObjectHandlerBase
     {
         public override string Name
         {
             get { return "Files"; }
         }
-        public override void ProvisionObjects(Web web, ProvisioningTemplate template)
+        public override void ProvisionObjects(Web web, ProvisioningTemplate template, ProvisioningTemplateApplyingInformation applyingInformation)
         {
             Log.Info(Constants.LOGGING_SOURCE_FRAMEWORK_PROVISIONING, CoreResources.Provisioning_ObjectHandlers_Files);
 
@@ -42,7 +42,8 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 
                 var folder = web.EnsureFolderPath(folderName);
 
-                Microsoft.SharePoint.Client.File targetFile = null;
+                File targetFile = null;
+
                 var checkedOut = false;
 
                 targetFile = folder.GetFile(file.Src);
@@ -55,7 +56,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 
                         using (var stream = template.Connector.GetFileStream(file.Src))
                         {
-                            targetFile = folder.UploadFile(file.Src, stream, file.Overwrite);
+                            targetFile = folder.UploadFile(template.Connector.GetFilenamePart(file.Src), stream, file.Overwrite);
                         }
                     }
                     else
@@ -67,7 +68,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                 {
                     using (var stream = template.Connector.GetFileStream(file.Src))
                     {
-                        targetFile = folder.UploadFile(file.Src, stream, file.Overwrite);
+                        targetFile = folder.UploadFile(template.Connector.GetFilenamePart(file.Src), stream, file.Overwrite);
                     }
 
                     checkedOut = CheckOutIfNeeded(web, targetFile);
@@ -96,7 +97,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                             {
                                 var wpEntity = new WebPartEntity();
                                 wpEntity.WebPartTitle = webpart.Title;
-                                wpEntity.WebPartXml = webpart.Contents.ToParsedString();
+                                wpEntity.WebPartXml = webpart.Contents.ToParsedString().Trim(new[] { '\n', ' ' });
                                 wpEntity.WebPartZone = webpart.Zone;
                                 wpEntity.WebPartIndex = (int) webpart.Order;
 
@@ -141,7 +142,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
         }
 
 
-        public override ProvisioningTemplate CreateEntities(Web web, ProvisioningTemplate template, ProvisioningTemplateCreationInformation creationInfo)
+        public override ProvisioningTemplate ExtractObjects(Web web, ProvisioningTemplate template, ProvisioningTemplateCreationInformation creationInfo)
         {
             // Impossible to return all files in the site currently
 
@@ -158,6 +159,24 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
         {
 
             return template;
+        }
+
+        public override bool WillProvision(Web web, ProvisioningTemplate template)
+        {
+            if (!_willProvision.HasValue)
+            {
+                _willProvision = template.Files.Any();
+            }
+            return _willProvision.Value;
+        }
+
+        public override bool WillExtract(Web web, ProvisioningTemplate template, ProvisioningTemplateCreationInformation creationInfo)
+        {
+            if (!_willExtract.HasValue)
+            {
+                _willExtract = false;
+            }
+            return _willExtract.Value;
         }
     }
 }

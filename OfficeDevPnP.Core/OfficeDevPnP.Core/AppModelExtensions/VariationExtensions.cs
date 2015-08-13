@@ -139,7 +139,7 @@ namespace OfficeDevPnP.Core.AppModelExtensions
         /// </summary>
         /// <param name="context">Context for SharePoint objects and operations</param>
         /// <param name="variationLabels">Variation labels</param>
-        public static void ProviosionTargetVariationLabels(this ClientContext context, List<VariationLabelEntity> variationLabels)
+        public static void ProvisionTargetVariationLabels(this ClientContext context, List<VariationLabelEntity> variationLabels)
         {
             if (variationLabels == null)
             {
@@ -150,7 +150,7 @@ namespace OfficeDevPnP.Core.AppModelExtensions
             List<VariationLabelEntity> targetVariations = variationLabels.Where(x => x.IsSource == false).ToList();
 
             // Create target variation labels
-            if ((targetVariations != null) && (targetVariations.Count > 0))
+            if (targetVariations.Any())
             {
                 CreateVariationLabels(context, targetVariations);
             }
@@ -173,6 +173,55 @@ namespace OfficeDevPnP.Core.AppModelExtensions
                 // Wait for 60 seconds and then try again
                 System.Threading.Thread.Sleep(60000);
             }
+        }
+
+        /// <summary>
+        /// Retrieve all configured variation labels
+        /// </summary>
+        /// <param name="context">Context for SharePoint objects and operations</param>
+        /// <returns>Collection of VariationLabelEntity objects</returns>
+        public static IEnumerable<VariationLabelEntity> GetVariationLabels(this ClientContext context)
+        {
+            var variationLabels = new List<VariationLabelEntity>();
+            // Get current web
+            Web web = context.Web;
+            context.Load(web, w => w.ServerRelativeUrl);
+            context.ExecuteQueryRetry();
+
+            // Try to get _VarLabelsListId property from web property bag
+            string variationLabelsListId = web.GetPropertyBagValueString(VARIATIONLABELSLISTID, string.Empty);
+
+            if (!string.IsNullOrEmpty(variationLabelsListId))
+            {
+                // Load the lists
+                var lists = web.Lists;
+                context.Load(lists);
+                context.ExecuteQueryRetry();
+
+                // Get the "Variation Labels" List by id
+                Guid varRelationshipsListId = new Guid(variationLabelsListId);
+                var variationLabelsList = lists.GetById(varRelationshipsListId);
+
+                // Get the variationLabelsList list items
+                ListItemCollection collListItems = variationLabelsList.GetItems(CamlQuery.CreateAllItemsQuery());
+                context.Load(collListItems);
+                context.ExecuteQueryRetry();
+
+                foreach (var listItem in collListItems)
+                {
+                    var label = new VariationLabelEntity();
+                    label.Title = (string)listItem["Title"];
+                    label.Description = (string)listItem["Description"];
+                    label.FlagControlDisplayName = (string)listItem["Flag_x0020_Control_x0020_Display"];
+                    label.Language = (string)listItem["Language"];
+                    label.Locale = Convert.ToUInt32(listItem["Locale"]);
+                    label.HierarchyCreationMode = (string)listItem["Hierarchy_x0020_Creation_x0020_M"];
+                    label.IsSource = (bool)listItem["Is_x0020_Source"];
+                    label.IsCreated = (bool)listItem["Hierarchy_x0020_Is_x0020_Created"];
+                    variationLabels.Add(label);
+                }
+            }
+            return variationLabels;
         }
 
         #region Helper methods
@@ -208,31 +257,28 @@ namespace OfficeDevPnP.Core.AppModelExtensions
                 context.Load(collListItems);
                 context.ExecuteQueryRetry();
 
-                if (variationLabelsList != null)
+                foreach (VariationLabelEntity label in variationLabels)
                 {
-                    foreach (VariationLabelEntity label in variationLabels)
+                    // Check if variation label already exists
+                    var varLabel = collListItems.FirstOrDefault(x => x["Language"].ToString() == label.Language);
+
+                    if (varLabel == null)
                     {
-                        // Check if variation label already exists
-                        var varLabel = collListItems.FirstOrDefault(x => x["Language"].ToString() == label.Language);
+                        // Create the new item
+                        ListItemCreationInformation itemCreateInfo = new ListItemCreationInformation();
+                        ListItem olistItem = variationLabelsList.AddItem(itemCreateInfo);
 
-                        if (varLabel == null)
-                        {
-                            // Create the new item
-                            ListItemCreationInformation itemCreateInfo = new ListItemCreationInformation();
-                            ListItem olistItem = variationLabelsList.AddItem(itemCreateInfo);
+                        olistItem["Title"] = label.Title;
+                        olistItem["Description"] = label.Description;
+                        olistItem["Flag_x0020_Control_x0020_Display"] = label.FlagControlDisplayName;
+                        olistItem["Language"] = label.Language;
+                        olistItem["Locale"] = label.Locale;
+                        olistItem["Hierarchy_x0020_Creation_x0020_M"] = label.HierarchyCreationMode;
+                        olistItem["Is_x0020_Source"] = label.IsSource;
+                        olistItem["Hierarchy_x0020_Is_x0020_Created"] = false;
 
-                            olistItem["Title"] = label.Title;
-                            olistItem["Description"] = label.Description;
-                            olistItem["Flag_x0020_Control_x0020_Display"] = label.FlagControlDisplayName;
-                            olistItem["Language"] = label.Language;
-                            olistItem["Locale"] = label.Locale;
-                            olistItem["Hierarchy_x0020_Creation_x0020_M"] = label.HierarchyCreationMode;
-                            olistItem["Is_x0020_Source"] = label.IsSource;
-                            olistItem["Hierarchy_x0020_Is_x0020_Created"] = false;
-
-                            olistItem.Update();
-                            context.ExecuteQueryRetry();
-                        }
+                        olistItem.Update();
+                        context.ExecuteQueryRetry();
                     }
                 }
             }
@@ -273,12 +319,9 @@ namespace OfficeDevPnP.Core.AppModelExtensions
                 context.Load(collListItems);
                 context.ExecuteQueryRetry();
 
-                if (variationLabelsList != null)
-                {
-                    // Check hierarchy is created
-                    ListItem varLabel = collListItems.FirstOrDefault(x => x["Language"].ToString() == variationLabel.Language);
-                    hierarchyIsCreated = (bool)varLabel["Hierarchy_x0020_Is_x0020_Created"];
-                }
+                // Check hierarchy is created
+                ListItem varLabel = collListItems.First(x => x["Language"].ToString() == variationLabel.Language);
+                variationLabel.IsCreated = hierarchyIsCreated = (bool)varLabel["Hierarchy_x0020_Is_x0020_Created"];
             }
 
             return hierarchyIsCreated;

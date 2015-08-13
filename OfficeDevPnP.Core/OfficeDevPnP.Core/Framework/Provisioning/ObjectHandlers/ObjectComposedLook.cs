@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 
 namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 {
-    public class ObjectComposedLook : ObjectHandlerBase
+    internal class ObjectComposedLook : ObjectHandlerBase
     {
 
         public override string Name
@@ -17,17 +17,17 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             get { return "Composed Looks"; }
         }
 
+       
 
-
-        public override void ProvisionObjects(Web web, ProvisioningTemplate template)
+        public override void ProvisionObjects(Web web, ProvisioningTemplate template, ProvisioningTemplateApplyingInformation applyingInformation)
         {
 
             Log.Info(Constants.LOGGING_SOURCE_FRAMEWORK_PROVISIONING, CoreResources.Provisioning_ObjectHandlers_ComposedLooks);
-            if (template.ComposedLook != null && 
+            if (template.ComposedLook != null &&
                 !template.ComposedLook.Equals(ComposedLook.Empty))
             {
                 bool executeQueryNeeded = false;
-                
+
                 // Apply alternate CSS
                 if (!string.IsNullOrEmpty(template.ComposedLook.AlternateCSS))
                 {
@@ -36,7 +36,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                     web.Update();
                     executeQueryNeeded = true;
                 }
-                
+
                 // Apply Site logo
                 if (!string.IsNullOrEmpty(template.ComposedLook.SiteLogo))
                 {
@@ -88,8 +88,8 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             }
         }
 
-        public override ProvisioningTemplate CreateEntities(Web web, ProvisioningTemplate template, ProvisioningTemplateCreationInformation creationInfo)
-        {            
+        public override ProvisioningTemplate ExtractObjects(Web web, ProvisioningTemplate template, ProvisioningTemplateCreationInformation creationInfo)
+        {
             // Load object if not there
             bool executeQueryNeeded = false;
             if (!web.IsPropertyAvailable("Url"))
@@ -116,7 +116,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 #endif
             if (executeQueryNeeded)
             {
-                web.Context.ExecuteQuery();
+                web.Context.ExecuteQueryRetry();
             }
 
             // Information coming from the site
@@ -130,8 +130,15 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 #endif
             var theme = web.GetCurrentComposedLook();
 
+
             if (theme != null)
             {
+                if (creationInfo != null)
+                {
+                    // Don't exclude the DesignPreviewThemedCssFolderUrl property bag, if any
+                    creationInfo.PropertyBagPropertiesToPreserve.Add("DesignPreviewThemedCssFolderUrl");
+                }
+
                 template.ComposedLook.Name = theme.Name;
 
                 if (theme.IsCustomComposedLook)
@@ -157,7 +164,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
                         else
                         {
                             spConnectorRoot = spConnector;
-                        }                        
+                        }
 
                         // Download the theme/branding specific files
                         DownLoadFile(spConnector, spConnectorRoot, creationInfo.FileConnector, web.Url, web.AlternateCssUrl);
@@ -205,6 +212,11 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             else
             {
                 template.ComposedLook = null;
+            }
+
+            if (creationInfo != null && creationInfo.BaseTemplate != null)
+            {
+                template = CleanupEntities(template, creationInfo.BaseTemplate);
             }
 
             return template;
@@ -284,43 +296,35 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             return file;
         }
 
-        private string Tokenize(string url, string webUrl)
-        {
-            if (string.IsNullOrEmpty(url))
-            {
-                return "";
-            }
-            else
-            {
-                if (url.IndexOf("/_catalogs/theme", StringComparison.InvariantCultureIgnoreCase) > -1)
-                {
-                    return url.Substring(url.IndexOf("/_catalogs/theme", StringComparison.InvariantCultureIgnoreCase)).Replace("/_catalogs/theme", "{themecatalog}");
-                }
-                if (url.IndexOf("/_catalogs/masterpage", StringComparison.InvariantCultureIgnoreCase) > -1)
-                {
-                    return url.Substring(url.IndexOf("/_catalogs/masterpage", StringComparison.InvariantCultureIgnoreCase)).Replace("/_catalogs/masterpage", "{masterpagecatalog}");
-                }
-                if (url.IndexOf(webUrl, StringComparison.InvariantCultureIgnoreCase) > -1)
-                {
-                    return url.Replace(webUrl, "{site}");
-                }
-                else
-                {
-                    Uri r = new Uri(webUrl);
-                    if (url.IndexOf(r.PathAndQuery, StringComparison.InvariantCultureIgnoreCase) > -1)
-                    {
-                        return url.Replace(r.PathAndQuery, "{site}");
-                    }
-                }
-
-                // nothing to tokenize...
-                return url;
-            }
-        }
-
         private ProvisioningTemplate CleanupEntities(ProvisioningTemplate template, ProvisioningTemplate baseTemplate)
         {
+            if (template.ComposedLook != null && baseTemplate.ComposedLook != null)
+            {
+                if (template.ComposedLook.Equals(baseTemplate.ComposedLook))
+                {
+                    template.ComposedLook = null;
+                }
+              
+            }
             return template;
+        }
+
+        public override bool WillProvision(Web web, ProvisioningTemplate template)
+        {
+            if (!_willProvision.HasValue)
+            {
+                _willProvision = (template.ComposedLook != null && !template.ComposedLook.Equals(ComposedLook.Empty));
+            }
+            return _willProvision.Value;
+        }
+
+        public override bool WillExtract(Web web, ProvisioningTemplate template, ProvisioningTemplateCreationInformation creationInfo)
+        {
+            if (!_willExtract.HasValue)
+            {
+                _willExtract = true;
+            }
+            return _willExtract.Value;
         }
     }
 }

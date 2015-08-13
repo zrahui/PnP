@@ -15,12 +15,13 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
     [TestClass()]
     public class TenantExtensionsTests
     {
-        private string sitecollectionName = "TestPnPSC_123456789";
+        private string sitecollectionName = "TestPnPSC_123456789_";
 
         #region Test initialize and cleanup
         [TestInitialize()]
         public void Initialize()
         {
+            sitecollectionName = sitecollectionName + (new Random().Next(0, 9)).ToString();
             using (var tenantContext = TestCommon.CreateTenantClientContext())
             {
                 //Ensure nothing was left behind before we run our tests
@@ -56,6 +57,11 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
         [TestMethod()]
         public void GetOneDriveSiteCollectionsTest()
         {
+            if (TestCommon.AppOnlyTesting())
+            {
+                Assert.Inconclusive("Web service tests are not supported when testing using app-only");
+            }
+
             using (var tenantContext = TestCommon.CreateTenantClientContext())
             {
                 var tenant = new Tenant(tenantContext);
@@ -68,7 +74,13 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
 
         [TestMethod()]
         public void GetUserProfileServiceClientTest() {
-            using (var tenantContext = TestCommon.CreateTenantClientContext()) {
+            if (TestCommon.AppOnlyTesting())
+            {
+                Assert.Inconclusive("Web service tests are not supported when testing using app-only");
+            }
+
+            using (var tenantContext = TestCommon.CreateTenantClientContext())
+            {
                 var tenant = new Tenant(tenantContext);
                 var serviceClient = tenant.GetUserProfileServiceClient();
                 tenantContext.Load(tenantContext.Web, w => w.CurrentUser);
@@ -259,13 +271,24 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
         {
             string devSiteUrl = ConfigurationManager.AppSettings["SPODevSiteUrl"];
             string siteToCreateUrl = GetTestSiteCollectionName(devSiteUrl, sitecollectionName);
+
+            string siteOwnerLogin = ConfigurationManager.AppSettings["SPOUserName"];
+            if (TestCommon.AppOnlyTesting())
+            {
+                using (var clientContext = TestCommon.CreateClientContext())
+                {
+                    List<UserEntity> admins = clientContext.Web.GetAdministrators();
+                    siteOwnerLogin = admins[0].LoginName.Split(new string[] { "|" }, StringSplitOptions.RemoveEmptyEntries)[2];
+                }
+            }
+
             SiteEntity siteToCreate = new SiteEntity()
             {
                 Url = siteToCreateUrl,
                 Template = "STS#0",
                 Title = "Test",
                 Description = "Test site collection",
-                SiteOwnerLogin = ConfigurationManager.AppSettings["SPOUserName"],
+                SiteOwnerLogin = siteOwnerLogin,
             };
 
             tenant.CreateSiteCollection(siteToCreate, false, true);

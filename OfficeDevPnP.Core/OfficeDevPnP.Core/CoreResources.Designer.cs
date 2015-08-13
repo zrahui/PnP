@@ -822,6 +822,15 @@ namespace OfficeDevPnP.Core {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Data Rows.
+        /// </summary>
+        internal static string Provisioning_ObjectHandlers_ListInstancesDataRows {
+            get {
+                return ResourceManager.GetString("Provisioning_ObjectHandlers_ListInstancesDataRows", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Pages.
         /// </summary>
         internal static string Provisioning_ObjectHandlers_Pages {
@@ -836,6 +845,15 @@ namespace OfficeDevPnP.Core {
         internal static string Provisioning_ObjectHandlers_PropertyBagEntries {
             get {
                 return ResourceManager.GetString("Provisioning_ObjectHandlers_PropertyBagEntries", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Site Policy.
+        /// </summary>
+        internal static string Provisioning_ObjectHandlers_SitePolicy {
+            get {
+                return ResourceManager.GetString("Provisioning_ObjectHandlers_SitePolicy", resourceCulture);
             }
         }
         
@@ -872,6 +890,15 @@ namespace OfficeDevPnP.Core {
         internal static string Provisioning_ObjectHandlers_TermGroups {
             get {
                 return ResourceManager.GetString("Provisioning_ObjectHandlers_TermGroups", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot process XML file {0}..
+        /// </summary>
+        internal static string Provisioning_Providers_XML_InvalidFileFormat {
+            get {
+                return ResourceManager.GetString("Provisioning_Providers_XML_InvalidFileFormat", resourceCulture);
             }
         }
         
@@ -1197,6 +1224,15 @@ namespace OfficeDevPnP.Core {
         internal static string TimerJob_Authentication_RetrieveFromCredManFailed {
             get {
                 return ResourceManager.GetString("TimerJob_Authentication_RetrieveFromCredManFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tenant admin site set to {0}..
+        /// </summary>
+        internal static string TimerJob_Authentication_TenantAdmin {
+            get {
+                return ResourceManager.GetString("TimerJob_Authentication_TenantAdmin", resourceCulture);
             }
         }
         

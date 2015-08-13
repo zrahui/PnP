@@ -14,22 +14,22 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 {
     internal class SiteToTemplateConversion
     {
-        
         /// <summary>
         /// Actual implementation of extracting configuration from existing site.
         /// </summary>
         /// <param name="web"></param>
-        /// <param name="baseTemplate"></param>
+        /// <param name="creationInfo"></param>
         /// <returns></returns>
         internal ProvisioningTemplate GetRemoteTemplate(Web web, ProvisioningTemplateCreationInformation creationInfo)
         {
             Log.Info(Constants.LOGGING_SOURCE_FRAMEWORK_PROVISIONING, CoreResources.Provisioning_ObjectHandlers_StartExtraction);
             
             ProvisioningProgressDelegate progressDelegate = null;
-            
+            ProvisioningMessagesDelegate messagesDelegate = null;
             if (creationInfo != null)
             {
                 progressDelegate = creationInfo.ProgressDelegate;
+                messagesDelegate = creationInfo.MessagesDelegate;
             }
 
             // Create empty object
@@ -40,6 +40,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 
             List<ObjectHandlerBase> objectHandlers = new List<ObjectHandlerBase>();
 
+            objectHandlers.Add(new ObjectSitePolicy());
             objectHandlers.Add(new ObjectSiteSecurity());
             objectHandlers.Add(new ObjectTermGroups());
             objectHandlers.Add(new ObjectField());
@@ -55,16 +56,23 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 
             int step = 1;
 
-            var count = objectHandlers.Count(o => o.ReportProgress);
+            var count = objectHandlers.Count(o => o.ReportProgress && o.WillExtract(web,template,creationInfo));
 
             foreach (var handler in objectHandlers)
             {
-                if (handler.ReportProgress && progressDelegate != null)
+                if (handler.WillExtract(web, template, creationInfo))
                 {
-                    progressDelegate(handler.Name, step, count);
-                    step++;
+                    if (messagesDelegate != null)
+                    {
+                        handler.MessagesDelegate = messagesDelegate;
+                    }
+                    if (handler.ReportProgress && progressDelegate != null)
+                    {
+                        progressDelegate(handler.Name, step, count);
+                        step++;
+                    }
+                    template = handler.ExtractObjects(web, template, creationInfo);
                 }
-                template = handler.CreateEntities(web, template, creationInfo);
             }
             Log.Info(Constants.LOGGING_SOURCE_FRAMEWORK_PROVISIONING, CoreResources.Provisioning_ObjectHandlers_FinishExtraction);
             return template;
@@ -75,18 +83,23 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
         /// </summary>
         /// <param name="web"></param>
         /// <param name="template"></param>
+        /// <param name="provisioningInfo"></param>
         internal void ApplyRemoteTemplate(Web web, ProvisioningTemplate template, ProvisioningTemplateApplyingInformation provisioningInfo)
         {
             ProvisioningProgressDelegate progressDelegate = null;
+            ProvisioningMessagesDelegate messagesDelegate = null;
             if (provisioningInfo != null)
             {
                 progressDelegate = provisioningInfo.ProgressDelegate;
+                messagesDelegate = provisioningInfo.MessageDelegate;
             }
+            
 
             Log.Info(Constants.LOGGING_SOURCE_FRAMEWORK_PROVISIONING, CoreResources.Provisioning_ObjectHandlers_StartProvisioning);
 
             List<ObjectHandlerBase> objectHandlers = new List<ObjectHandlerBase>();
 
+            objectHandlers.Add(new ObjectSitePolicy());
             objectHandlers.Add(new ObjectSiteSecurity());
             objectHandlers.Add(new ObjectFeatures());
             objectHandlers.Add(new ObjectTermGroups());
@@ -94,6 +107,7 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
             objectHandlers.Add(new ObjectContentType());
             objectHandlers.Add(new ObjectListInstance());
             objectHandlers.Add(new ObjectLookupFields());
+            objectHandlers.Add(new ObjectListInstanceDataRows());
             objectHandlers.Add(new ObjectFiles());
             objectHandlers.Add(new ObjectPages());
             objectHandlers.Add(new ObjectCustomActions());
@@ -106,16 +120,23 @@ namespace OfficeDevPnP.Core.Framework.Provisioning.ObjectHandlers
 
             int step = 1;
 
-            var count = objectHandlers.Count(o => o.ReportProgress);
+            var count = objectHandlers.Count(o => o.ReportProgress && o.WillProvision(web, template));
 
             foreach (var handler in objectHandlers)
             {
-                if (handler.ReportProgress && progressDelegate != null)
+                if (handler.WillProvision(web, template))
                 {
-                    progressDelegate(handler.Name, step, count);
-                    step++;
+                    if (messagesDelegate != null)
+                    {
+                        handler.MessagesDelegate = messagesDelegate;
+                    }
+                    if (handler.ReportProgress && progressDelegate != null)
+                    {
+                        progressDelegate(handler.Name, step, count);
+                        step++;
+                    }
+                    handler.ProvisionObjects(web, template, provisioningInfo);
                 }
-                handler.ProvisionObjects(web, template);
             }
 
             Log.Info(Constants.LOGGING_SOURCE_FRAMEWORK_PROVISIONING, CoreResources.Provisioning_ObjectHandlers_FinishProvisioning);

@@ -22,30 +22,40 @@ namespace OfficeDevPnP.Core.Tests.Framework.ObjectHandlers
         [TestInitialize]
         public void Initialize()
         {
-            _termSetGuid = Guid.NewGuid();
-            _termGroupGuid = Guid.NewGuid();
+            if (!TestCommon.AppOnlyTesting())
+            {
+                _termSetGuid = Guid.NewGuid();
+                _termGroupGuid = Guid.NewGuid();
+            }
+            else
+            {
+                Assert.Inconclusive("Taxonomy tests are not supported when testing using app-only");
+            }
         }
 
         [TestCleanup]
         public void CleanUp()
         {
-            using (var ctx = TestCommon.CreateClientContext())
+            if (!TestCommon.AppOnlyTesting())
             {
-                try
+                using (var ctx = TestCommon.CreateClientContext())
                 {
-                    TaxonomySession session = TaxonomySession.GetTaxonomySession(ctx);
+                    try
+                    {
+                        TaxonomySession session = TaxonomySession.GetTaxonomySession(ctx);
 
-                    var store = session.GetDefaultSiteCollectionTermStore();
-                    var termSet = store.GetTermSet(_termSetGuid);
-                    termSet.DeleteObject();
+                        var store = session.GetDefaultSiteCollectionTermStore();
+                        var termSet = store.GetTermSet(_termSetGuid);
+                        termSet.DeleteObject();
 
-                    var termGroup = store.GetGroup(_termGroupGuid);
-                    termGroup.DeleteObject();
-                    store.CommitAll();
-                    ctx.ExecuteQueryRetry();
-                }
-                catch
-                {
+                        var termGroup = store.GetGroup(_termGroupGuid);
+                        termGroup.DeleteObject();
+                        store.CommitAll();
+                        ctx.ExecuteQueryRetry();
+                    }
+                    catch
+                    {
+                    }
                 }
             }
         }
@@ -86,7 +96,7 @@ namespace OfficeDevPnP.Core.Tests.Framework.ObjectHandlers
             {
                 TokenParser.Initialize(ctx.Web, template);
 
-                new ObjectTermGroups().ProvisionObjects(ctx.Web, template);
+                new ObjectTermGroups().ProvisionObjects(ctx.Web, template, new ProvisioningTemplateApplyingInformation());
 
                 TaxonomySession session = TaxonomySession.GetTaxonomySession(ctx);
 
@@ -108,7 +118,7 @@ namespace OfficeDevPnP.Core.Tests.Framework.ObjectHandlers
                 var creationInfo = new ProvisioningTemplateCreationInformation(ctx.Web) { BaseTemplate = ctx.Web.GetBaseTemplate() };
 
                 var template2 = new ProvisioningTemplate();
-                template2 = new ObjectTermGroups().CreateEntities(ctx.Web, template, creationInfo);
+                template2 = new ObjectTermGroups().ExtractObjects(ctx.Web, template, creationInfo);
 
                 Assert.IsTrue(template.TermGroups.Any());
                 Assert.IsInstanceOfType(template.TermGroups, typeof(List<TermGroup>));
