@@ -20,11 +20,27 @@ namespace Microsoft.SharePoint.Client.Tests
         public void Initialize()
         {
 
-            #if !CLIENTSDKV15
+#if !CLIENTSDKV15
             _userLogin = ConfigurationManager.AppSettings["SPOUserName"];
-            #else
+            if (TestCommon.AppOnlyTesting())
+            {
+                using (var clientContext = TestCommon.CreateClientContext())
+                {
+                    List<UserEntity> admins = clientContext.Web.GetAdministrators();
+                    _userLogin = admins[0].LoginName.Split(new string[] { "|" }, StringSplitOptions.RemoveEmptyEntries)[2];
+                }
+            }
+#else
             _userLogin = String.Format(@"{0}\{1}", ConfigurationManager.AppSettings["OnPremDomain"], ConfigurationManager.AppSettings["OnPremUserName"]);            
-            #endif
+            if (TestCommon.AppOnlyTesting())
+            {
+                using (var clientContext = TestCommon.CreateClientContext())
+                {
+                    List<UserEntity> admins = clientContext.Web.GetAdministrators();
+                    _userLogin = admins[0].LoginName.Split(new string[] { "|" }, StringSplitOptions.RemoveEmptyEntries)[1];
+                }
+            }
+#endif
 
             using (ClientContext clientContext = TestCommon.CreateClientContext())
             {
@@ -111,6 +127,20 @@ namespace Microsoft.SharePoint.Client.Tests
                 }
             }
         }
+
+        [TestMethod]
+        public void GroupExistsTest()
+        {
+            using (ClientContext clientContext = TestCommon.CreateClientContext())
+            {
+                bool groupExists = clientContext.Web.GroupExists(_testGroupName);
+                Assert.IsTrue(groupExists);
+
+                groupExists = clientContext.Web.GroupExists(_testGroupName + "987654321654367");
+                Assert.IsFalse(groupExists);
+            }
+        }
+
         #endregion
 
         #region Permission level tests

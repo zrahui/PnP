@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.SharePoint.Client.Social;
 using Microsoft.SharePoint.Client.WorkflowServices;
 
 namespace Microsoft.SharePoint.Client
 {
-    public static class WorkflowExtensions
+    public static partial class WorkflowExtensions
     {
         #region Subscriptions
         /// <summary>
@@ -203,12 +204,50 @@ namespace Microsoft.SharePoint.Client
         {
             var servicesManager = new WorkflowServicesManager(web.Context, web);
             var deploymentService = servicesManager.GetWorkflowDeploymentService();
+            
             var definition = deploymentService.GetDefinition(id);
             web.Context.Load(definition);
             web.Context.ExecuteQueryRetry();
             return definition;
         }
 
+        public static Guid AddWorkflowDefinition(this Web web, WorkflowDefinition definition, bool publish = true)
+        {
+            var servicesManager = new WorkflowServicesManager(web.Context, web);
+            var deploymentService = servicesManager.GetWorkflowDeploymentService();
+            
+            WorkflowDefinition def = new WorkflowDefinition(web.Context);
+            def.AssociationUrl = definition.AssociationUrl;
+            def.Description = definition.Description;
+            def.DisplayName = definition.DisplayName;
+            def.DraftVersion = definition.DraftVersion;
+            def.FormField = definition.FormField;
+            def.Id = definition.Id != Guid.Empty ? definition.Id : Guid.NewGuid();
+            foreach (var prop in definition.Properties)
+            {
+                def.SetProperty(prop.Key,prop.Value);
+            }
+            def.RequiresAssociationForm = definition.RequiresAssociationForm;
+            def.RequiresInitiationForm = definition.RequiresInitiationForm;
+            def.RestrictToScope = definition.RestrictToScope;
+            def.RestrictToType = definition.RestrictToType;
+            def.Xaml = definition.Xaml;
+
+            var result = deploymentService.SaveDefinition(def);
+
+            web.Context.ExecuteQueryRetry();
+
+            if (publish)
+            {
+                deploymentService.PublishDefinition(result.Value);
+                web.Context.ExecuteQueryRetry();
+            }
+            return result.Value;
+        }
+        /// <summary>
+        /// Deletes a workflow definition
+        /// </summary>
+        /// <param name="definition"></param>
         public static void Delete(this WorkflowDefinition definition)
         {
             var clientContext = definition.Context as ClientContext;
@@ -292,6 +331,25 @@ namespace Microsoft.SharePoint.Client
             workflowInstanceService.ResumeWorkflow(instance);
             clientContext.ExecuteQueryRetry();
         }
+        #endregion
+
+        #region Messaging
+
+        /// <summary>
+        /// Publish a custom event to a target workflow instance
+        /// </summary>
+        /// <param name="instance"></param>
+        /// <param name="eventName">The name of the target event</param>
+        /// <param name="payload">The payload that will be sent to the event</param>
+        public static void PublishCustomEvent(this WorkflowInstance instance, String eventName, String payload)
+        {
+            var clientContext = instance.Context as ClientContext;
+            var servicesManager = new WorkflowServicesManager(clientContext, clientContext.Web);
+            var workflowInstanceService = servicesManager.GetWorkflowInstanceService();
+            workflowInstanceService.PublishCustomEvent(instance, eventName, payload);
+            clientContext.ExecuteQueryRetry();
+        }
+
         #endregion
     }
 }

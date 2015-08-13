@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.SharePoint.Client;
 using System.IO;
+using System.Configuration;
 
 namespace OfficeDevPnP.Core.Tests.AppModelExtensions
 {
@@ -331,7 +332,6 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
 
         #endregion
 
-
         #region Composed Look tests
         [TestMethod()]
         public void DeployThemeAndCreateComposedLookTest()
@@ -490,16 +490,16 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                 var webCollection = context.Web.Webs;
                 context.Load(webCollection, wc => wc.Include(w => w.Title));
                 context.ExecuteQueryRetry();
-                var webToChange1 = webCollection.First(w => w.Title == testWebName);
+                var webToChangeRoot = webCollection.First(w => w.Title == testWebName);
 
-                var webCollection2 = webToChange1.Webs;
+                var webCollection2 = webToChangeRoot.Webs;
                 context.Load(webCollection2, wc => wc.Include(w => w.Title));
                 context.ExecuteQueryRetry();
                 var webToChangeA = webCollection2.First(w => w.Title == "A");
 
                 // Act
                 webToChangeA.SetComposedLookByUrl(builtInLookBlossom);
-                webToChange1.SetComposedLookByUrl(builtInLookSeaMonster, resetSubsitesToInherit: true);
+                webToChangeRoot.SetComposedLookByUrl(builtInLookSeaMonster, resetSubsitesToInherit: true, updateRootOnly:false);
             }
 
             using (var context = TestCommon.CreateClientContext())
@@ -507,9 +507,9 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                 var webCollection = context.Web.Webs;
                 context.Load(webCollection, wc => wc.Include(w => w.Title));
                 context.ExecuteQueryRetry();
-                var webToCheck1 = webCollection.First(w => w.Title == testWebName);
+                var webToCheckRoot = webCollection.First(w => w.Title == testWebName);
 
-                var webCollection2 = webToCheck1.Webs;
+                var webCollection2 = webToCheckRoot.Webs;
                 context.Load(webCollection2, wc => wc.Include(w => w.Title, w => w.MasterUrl, w => w.CustomMasterUrl));
                 context.ExecuteQueryRetry();
                 var webToCheckA = webCollection2.First(w => w.Title == "A");
@@ -582,6 +582,22 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                 string hex = BitConverter.ToString(hash);
                 //Check against last known hash 
                 Assert.AreEqual(knownHashOfSeattle, hex);
+            }
+        }
+        #endregion
+
+        #region Miscellanious tests
+        [TestMethod]
+        public void IsSubsiteTest()
+        {
+            using (ClientContext cc = TestCommon.CreateClientContext())
+            {
+                Assert.IsFalse(cc.Web.IsSubSite());
+
+                using (ClientContext ctx = cc.Clone(string.Format("{0}/{1}", ConfigurationManager.AppSettings["SPODevSiteUrl"], testWebName)))
+                {
+                    Assert.IsTrue(ctx.Web.IsSubSite());
+                }
             }
         }
         #endregion

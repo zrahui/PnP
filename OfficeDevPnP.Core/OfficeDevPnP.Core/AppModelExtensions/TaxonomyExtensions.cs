@@ -23,8 +23,68 @@ namespace Microsoft.SharePoint.Client
 
         private static readonly Regex InvalidNameRegex = new Regex("[;\"<>|&\\t]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        /// <summary>
+        /// The default Taxonomy Guid Label Delimiter
+        /// </summary>
         public const string TaxonomyGuidLabelDelimiter = "|";
 
+        /// <summary>
+        /// Creates a new term group, in the specified term store.
+        /// </summary>
+        /// <param name="termStore">the term store to use</param>
+        /// <param name="groupName">Name of the term group</param>
+        /// <param name="groupId">(Optional) ID of the group; if not provided a random GUID is used</param>
+        /// <param name="groupDescription">(Optional) Description of the term group</param>
+        /// <returns>The created term group</returns>
+        public static TermGroup CreateTermGroup(this TermStore termStore, string groupName, Guid groupId = default(Guid), string groupDescription = null)
+        {
+            if (string.IsNullOrEmpty(groupName)) { throw new ArgumentNullException("groupName"); }
+
+            var termGroup = default(TermGroup);
+            groupName = NormalizeName(groupName);
+            ValidateName(groupName, "groupName");
+
+            // Create Group
+            if (groupId == Guid.Empty)
+            {
+                groupId = Guid.NewGuid();
+            }
+
+            if (!termStore.IsObjectPropertyInstantiated("Name"))
+            {
+                // get instances to root web, since we are processing currently sub site 
+                termStore.Context.Load(termStore);
+                termStore.Context.ExecuteQueryRetry();
+            }
+            Log.Info(Constants.LOGGING_SOURCE, CoreResources.TaxonomyExtension_CreateTermGroup0InStore1, groupName, termStore.Name);
+            termGroup = termStore.CreateGroup(groupName, groupId);
+            termStore.Context.Load(termGroup, g => g.Name, g => g.Id, g => g.Description);
+            termStore.Context.ExecuteQueryRetry();
+
+            // Apply description
+            bool changed = false;
+            if (groupDescription != null && !string.Equals(termGroup.Description, groupDescription))
+            {
+                try
+                {
+                    ValidateDescription(groupDescription, "groupDescription");
+                    termGroup.Description = groupDescription;
+                    changed = true;
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(Constants.LOGGING_SOURCE, CoreResources.TaxonomyExtension_ExceptionUpdateDescriptionGroup01, termGroup.Name, termGroup.Id, ex.Message);
+                }
+            }
+            if (changed)
+            {
+                Log.Debug(Constants.LOGGING_SOURCE, "Updating term group");
+                termStore.Context.ExecuteQueryRetry();
+                //termStore.CommitAll();
+            }
+
+            return termGroup;
+        }
 
         /// <summary>
         /// Ensures the named group exists, returning a reference to the group, and creating or updating as necessary.
@@ -255,6 +315,11 @@ namespace Microsoft.SharePoint.Client
             return termStore;
         }
 
+        /// <summary>
+        /// Returns a new taxonomy session for the current site
+        /// </summary>
+        /// <param name="site"></param>
+        /// <returns></returns>
         public static TaxonomySession GetTaxonomySession(this Site site)
         {
             TaxonomySession tSession = TaxonomySession.GetTaxonomySession(site.Context);
@@ -263,6 +328,11 @@ namespace Microsoft.SharePoint.Client
             return tSession;
         }
 
+        /// <summary>
+        /// Returns the default keywords termstore for the current site
+        /// </summary>
+        /// <param name="site"></param>
+        /// <returns></returns>
         public static TermStore GetDefaultKeywordsTermStore(this Site site)
         {
             TaxonomySession session = TaxonomySession.GetTaxonomySession(site.Context);
@@ -273,6 +343,11 @@ namespace Microsoft.SharePoint.Client
             return termStore;
         }
 
+        /// <summary>
+        /// Returns the default site collection termstore
+        /// </summary>
+        /// <param name="site"></param>
+        /// <returns></returns>
         public static TermStore GetDefaultSiteCollectionTermStore(this Site site)
         {
             TaxonomySession session = TaxonomySession.GetTaxonomySession(site.Context);
@@ -284,6 +359,13 @@ namespace Microsoft.SharePoint.Client
         }
 
 
+        /// <summary>
+        /// Finds a termset by name
+        /// </summary>
+        /// <param name="site">The current site</param>
+        /// <param name="name">The name of the termset</param>
+        /// <param name="lcid">The locale ID for the termset to return, defaults to 1033</param>
+        /// <returns></returns>
         public static TermSetCollection GetTermSetsByName(this Site site, string name, int lcid = 1033)
         {
             if (string.IsNullOrEmpty(name))
@@ -298,6 +380,12 @@ namespace Microsoft.SharePoint.Client
         }
 
 
+        /// <summary>
+        /// Finds a termgroup by name
+        /// </summary>
+        /// <param name="site">The current site</param>
+        /// <param name="name">The name of the termgroup</param>
+        /// <returns></returns>
         public static TermGroup GetTermGroupByName(this Site site, string name)
         {
             if (string.IsNullOrEmpty(name))
@@ -310,6 +398,33 @@ namespace Microsoft.SharePoint.Client
             return groups.FirstOrDefault();
         }
 
+        /// <summary>
+        /// Gets the named term group, if it exists in the term store.
+        /// </summary>
+        /// <param name="termStore">The term store to use</param>
+        /// <param name="groupName">Name of the term group</param>
+        /// <returns>The requested term group, or null if it does not exist</returns>
+        public static TermGroup GetTermGroupByName(this TermStore termStore, string groupName)
+        {
+            if (string.IsNullOrEmpty(groupName)) { throw new ArgumentNullException("groupName"); }
+
+            var termGroup = default(TermGroup);
+            groupName = NormalizeName(groupName);
+            ValidateName(groupName, "groupName");
+
+            // Find group
+            var groups = termStore.Context.LoadQuery(termStore.Groups.Include(g => g.Name, g => g.Id, g => g.Description));
+            termStore.Context.ExecuteQueryRetry();
+            termGroup = groups.FirstOrDefault(g => string.Equals(g.Name, groupName, StringComparison.OrdinalIgnoreCase));
+            return termGroup;
+        }
+
+        /// <summary>
+        /// Finds a termgroup by its ID
+        /// </summary>
+        /// <param name="site">The current site</param>
+        /// <param name="termGroupId">The ID of the termgroup</param>
+        /// <returns></returns>
         public static TermGroup GetTermGroupById(this Site site, Guid termGroupId)
         {
             if (termGroupId == null || termGroupId.Equals(Guid.Empty))
@@ -368,11 +483,26 @@ namespace Microsoft.SharePoint.Client
             }
         }
 
+        /// <summary>
+        /// Adds a term to a given termset
+        /// </summary>
+        /// <param name="site">The current site</param>
+        /// <param name="termSetId">The ID of the termset</param>
+        /// <param name="term">The label of the new term to create</param>
+        /// <returns></returns>
         public static Term AddTermToTermset(this Site site, Guid termSetId, string term)
         {
             return AddTermToTermset(site, termSetId, term, Guid.NewGuid());
         }
 
+        /// <summary>
+        /// Adds a term to a given termset
+        /// </summary>
+        /// <param name="site">The current site</param>
+        /// <param name="termSetId">The ID of the termset</param>
+        /// <param name="term">The label of the new term to create</param>
+        /// <param name="termId">The ID of the term to create</param>
+        /// <returns></returns>
         public static Term AddTermToTermset(this Site site, Guid termSetId, string term, Guid termId)
         {
             if (string.IsNullOrEmpty(term))
@@ -570,8 +700,6 @@ namespace Microsoft.SharePoint.Client
             }
         }
 
-      
-
         private static Term AddTermToTerm(this Term term, int lcid, string termLabel, Guid termId)
         {
             var clientContext = term.Context;
@@ -655,7 +783,7 @@ namespace Microsoft.SharePoint.Client
         public static TermSet ImportTermSet(this TermGroup termGroup, string filePath, Guid termSetId = default(Guid), bool synchroniseDeletions = false, bool? termSetIsOpen = null, string termSetContact = null, string termSetOwner = null)
         {
             if (filePath == null) { throw new ArgumentNullException("filePath"); }
-            if (string.IsNullOrWhiteSpace(filePath)) { throw new ArgumentException("File path is required.", "filePath"); }
+            if (string.IsNullOrWhiteSpace(filePath)) { throw new ArgumentException(CoreResources.TaxonomyExtensions_ImportTermSet_File_path_is_required_, "filePath"); }
 
             using (var fs = new FileStream(filePath, FileMode.Open))
             {
@@ -757,7 +885,7 @@ namespace Microsoft.SharePoint.Client
                             // Check file look vaguely like a CSV -- ensure the first line (headers) has some commas:
                             if (!rowText.Contains(","))
                             {
-                                throw new ArgumentException("Invalid CSV format; was expecting a comma in the first (header) line.", "reader");
+                                throw new ArgumentException(CoreResources.TaxonomyExtensions_ImportTermSetImplementation_Invalid_CSV_format__was_expecting_a_comma_in_the_first__header__line_, "reader");
                             }
                         }
                         else
@@ -1155,9 +1283,6 @@ namespace Microsoft.SharePoint.Client
         /// <returns></returns>
         public static List<string> ExportTermSet(this Site site, Guid termSetId, bool includeId, string delimiter = "|")
         {
-            var clientContext = site.Context;
-            TaxonomySession taxonomySession = taxonomySession = TaxonomySession.GetTaxonomySession(clientContext);
-
             var termStore = site.GetDefaultSiteCollectionTermStore();
 
             return ExportTermSet(site, termSetId, includeId, termStore, delimiter);
@@ -1308,6 +1433,13 @@ namespace Microsoft.SharePoint.Client
                 return TrimSpacesRegex.Replace(name, " ").Replace('＆', '&').Replace('＂', '"');
         }
 
+        /// <summary>
+        /// Returns a taxonomy item by it's path, e.g. Group|Set|Term
+        /// </summary>
+        /// <param name="site">The current site</param>
+        /// <param name="path">The path of the item to return</param>
+        /// <param name="delimiter">The delimeter separating groups, sets and term in the path. Defaults to |</param>
+        /// <returns></returns>
         public static TaxonomyItem GetTaxonomyItemByPath(this Site site, string path, string delimiter = "|")
         {
             var context = site.Context;
@@ -1406,6 +1538,13 @@ namespace Microsoft.SharePoint.Client
             }
         }
 
+        /// <summary>
+        /// Sets a value of a taxonomy field
+        /// </summary>
+        /// <param name="item">The item to process</param>
+        /// <param name="fieldId">The ID of the field to set</param>
+        /// <param name="label">The label of the term to set</param>
+        /// <param name="termGuid">The id of the term to set</param>
         public static void SetTaxonomyFieldValue(this ListItem item, Guid fieldId, string label, Guid termGuid)
         {
             ClientContext clientContext = item.Context as ClientContext;
@@ -1440,63 +1579,130 @@ namespace Microsoft.SharePoint.Client
             clientContext.ExecuteQueryRetry();
         }
 
-
-
-
+        private static void CleanupTaxonomyHiddenField(Web web, FieldCollection fields, TaxonomyFieldCreationInformation fieldCreationInformation)
+        {
+            // if the Guid is empty then we'll have no issue
+            if (fieldCreationInformation.Id != Guid.Empty)
+            {
+                FieldCollection _fields = fields;
+                web.Context.Load(_fields, fc => fc.Include(f => f.Id, f => f.InternalName, f => f.Hidden));
+                web.Context.ExecuteQueryRetry();
+                var _field = _fields.FirstOrDefault(f => f.InternalName.Equals(fieldCreationInformation.InternalName));
+                // if the field does not exist we assume the possiblity that it was created earlier then deleted and the hidden field was left behind
+                // if the field does exist then return and let the calling process exception out when attempting to create it
+                // this does not appear to be an issue with lists, just site columns, but it doesnt hurt to check
+                if (_field == null)
+                {
+                    // The hidden field format is the id of the field itself with hyphens removed and the first character replaced
+                    // with a random character, so get everything to the right of the first character and remove hyphens
+                    var _hiddenField = fieldCreationInformation.Id.ToString().Replace("-", "").Substring(1);
+                    _field = _fields.FirstOrDefault(f => f.InternalName.EndsWith(_hiddenField));
+                    if (_field != null)
+                    {
+                        if (_field.Hidden)
+                        {
+                            // just in case the field itself is hidden, make sure it is not because depending on the current CU hidden fields may not be deletable
+                            _field.Hidden = false;
+                            _field.Update();
+                        }
+                        _field.DeleteObject();
+                        web.Context.ExecuteQueryRetry();
+                    }
+                }
+            }
+        }
         /// <summary>
         /// Can be used to create taxonomy field remotely to web.
         /// </summary>
         /// <param name="web">Site to be processed - can be root web or sub site</param>
         /// <param name="fieldCreationInformation">Creation Information of the field</param>
         /// <returns>New taxonomy field</returns>
+
         public static Field CreateTaxonomyField(this Web web, TaxonomyFieldCreationInformation fieldCreationInformation)
         {
             fieldCreationInformation.InternalName.ValidateNotNullOrEmpty("internalName");
             fieldCreationInformation.DisplayName.ValidateNotNullOrEmpty("displayName");
             fieldCreationInformation.TaxonomyItem.ValidateNotNullOrEmpty("taxonomyItem");
 
+            CleanupTaxonomyHiddenField(web, web.Fields, fieldCreationInformation);
+
             if (fieldCreationInformation.Id == Guid.Empty)
             {
                 fieldCreationInformation.Id = Guid.NewGuid();
             }
 
-            try
+            var showFieldAttribute = new KeyValuePair<string, string>();
+            if (fieldCreationInformation.AdditionalAttributes != null)
             {
-                List<KeyValuePair<string, string>> additionalAttributes = new List<KeyValuePair<string, string>>();
-                additionalAttributes.Add(new KeyValuePair<string, string>("ShowField", "Term1033"));
-
-                var _field = web.CreateField(fieldCreationInformation);
-
-                WireUpTaxonomyFieldInternal(_field, fieldCreationInformation.TaxonomyItem, fieldCreationInformation.MultiValue);
-                _field.Update();
-
-                web.Context.ExecuteQueryRetry();
-
-                return _field;
+                showFieldAttribute = fieldCreationInformation.AdditionalAttributes.FirstOrDefault(a => a.Key == "ShowField");
             }
-            catch (Exception)
+            if (showFieldAttribute.Key == null)
             {
-                // If there is an exception the hidden field might be present
-                FieldCollection _fields = web.Fields;
-                web.Context.Load(_fields, fc => fc.Include(f => f.Id, f => f.InternalName));
-                web.Context.ExecuteQueryRetry();
-                var _hiddenField = fieldCreationInformation.Id.ToString().Replace("-", "");
-
-                var _field = _fields.FirstOrDefault(f => f.InternalName == _hiddenField);
-                if (_field != null)
+                if (fieldCreationInformation.AdditionalAttributes == null)
                 {
-                    _field.DeleteObject();
-                    web.Context.ExecuteQueryRetry();
+                    fieldCreationInformation.AdditionalAttributes = new List<KeyValuePair<string, string>>();
                 }
-                throw;
-
+                ((List<KeyValuePair<string, string>>)fieldCreationInformation.AdditionalAttributes).Add(new KeyValuePair<string, string>("ShowField", "Term1033"));
             }
+
+            var _field = web.CreateField(fieldCreationInformation);
+
+            WireUpTaxonomyFieldInternal(_field, fieldCreationInformation.TaxonomyItem, fieldCreationInformation.MultiValue);
+            _field.Update();
+
+            web.Context.ExecuteQueryRetry();
+
+            return _field;
 
         }
 
+        /// <summary>
+        /// Removes a taxonomy field (site column) and its associated hidden field by internal name
+        /// </summary>
+        /// <param name="web">Web object were the field (site column) exists</param>
+        /// <param name="internalName">Internal name of the taxonomy field (site column) to be removed</param>
+        public static void RemoveTaxonomyFieldByInternalName(this Web web, string internalName)
+        {
+            FieldCollection fields = web.Fields;
+            web.Context.Load(fields, fc => fc.Include(f => f.Id, f => f.InternalName));
+            web.Context.ExecuteQueryRetry();
 
+            Field field = fields.FirstOrDefault(f => f.InternalName == internalName);
 
+            if (field != null)
+            {
+                field.DeleteObject();
+                web.Update();
+                web.Context.ExecuteQueryRetry();
 
+                CleanupTaxonomyHiddenField(web, web.Fields, new TaxonomyFieldCreationInformation() { Id = field.Id, InternalName = field.InternalName });
+
+            }
+        }
+
+        /// <summary>
+        /// Removes a taxonomy field (site column) and its associated hidden field by id
+        /// </summary>
+        /// <param name="web">Web object were the field (site column) exists</param>
+        /// <param name="id">Guid representing the id of the taxonomy field (site column) to be removed</param>
+        public static void RemoveTaxonomyFieldById(this Web web, Guid id)
+        {
+
+            FieldCollection fields = web.Fields;
+            web.Context.Load(fields, fc => fc.Include(f => f.Id, f => f.InternalName));
+            web.Context.ExecuteQueryRetry();
+
+            Field field = fields.FirstOrDefault(f => f.Id == id);
+
+            if (field != null)
+            {
+                field.DeleteObject();
+                web.Update();
+                web.Context.ExecuteQueryRetry();
+
+                CleanupTaxonomyHiddenField(web, web.Fields, new TaxonomyFieldCreationInformation() { Id = id, InternalName = field.InternalName });
+            }
+        }
 
         /// <summary>
         /// Can be used to create taxonomy field remotely in a list. 
@@ -1510,44 +1716,34 @@ namespace Microsoft.SharePoint.Client
             fieldCreationInformation.DisplayName.ValidateNotNullOrEmpty("displayName");
             fieldCreationInformation.TaxonomyItem.ValidateNotNullOrEmpty("taxonomyItem");
 
+            CleanupTaxonomyHiddenField(list.ParentWeb, list.Fields, fieldCreationInformation);
+
             if (fieldCreationInformation.Id == Guid.Empty)
             {
                 fieldCreationInformation.Id = Guid.NewGuid();
             }
-            try
+            var showFieldAttribute = new KeyValuePair<string, string>();
+            if (fieldCreationInformation.AdditionalAttributes != null)
             {
-                List<KeyValuePair<string, string>> additionalAttributes = new List<KeyValuePair<string, string>>();
-                additionalAttributes.Add(new KeyValuePair<string, string>("ShowField", "Term1033"));
-
-                var _field = list.CreateField(fieldCreationInformation);
-
-                WireUpTaxonomyFieldInternal(_field, fieldCreationInformation.TaxonomyItem, fieldCreationInformation.MultiValue);
-                _field.Update();
-
-                list.Context.ExecuteQueryRetry();
-
-                return _field;
+                showFieldAttribute = fieldCreationInformation.AdditionalAttributes.FirstOrDefault(a => a.Key == "ShowField");
             }
-            catch (Exception)
+            if (showFieldAttribute.Key == null)
             {
-                // If there is an exception the hidden field might be present
-                FieldCollection _fields = list.Fields;
-                list.Context.Load(_fields, fc => fc.Include(f => f.Id, f => f.InternalName));
-                list.Context.ExecuteQueryRetry();
-                var _hiddenField = fieldCreationInformation.Id.ToString().Replace("-", "");
-
-                var _field = _fields.FirstOrDefault(f => f.InternalName == _hiddenField);
-                if (_field != null)
+                if (fieldCreationInformation.AdditionalAttributes == null)
                 {
-                    _field.Hidden = false; // Cannot delete a hidden column
-                    _field.Update();
-                    _field.DeleteObject();
-                    list.Context.ExecuteQueryRetry();
+                    fieldCreationInformation.AdditionalAttributes = new List<KeyValuePair<string, string>>();
                 }
-                throw;
+                ((List<KeyValuePair<string, string>>)fieldCreationInformation.AdditionalAttributes).Add(new KeyValuePair<string, string>("ShowField", "Term1033"));
             }
-        }
+            var _field = list.CreateField(fieldCreationInformation);
 
+            WireUpTaxonomyFieldInternal(_field, fieldCreationInformation.TaxonomyItem, fieldCreationInformation.MultiValue);
+            _field.Update();
+
+            list.Context.ExecuteQueryRetry();
+
+            return _field;
+        }
 
         /// <summary>
         /// Wires up MMS field to the specified term set.
@@ -1755,6 +1951,60 @@ namespace Microsoft.SharePoint.Client
             else
             {
                 return -1;
+            }
+        }
+
+        /// <summary>
+        /// Sets the default value for a managed metadata field
+        /// </summary>
+        /// <param name="field">Field to be wired up</param>
+        /// <param name="taxonomyItem">Taxonomy TermSet or Term</param>
+        /// <param name="defaultValue">default value for the field</param>
+        public static void SetTaxonomyFieldDefaultValue(this Field field, TaxonomyItem taxonomyItem, string defaultValue)
+        {
+            if (string.IsNullOrEmpty(defaultValue))
+            {
+                throw new ArgumentException("defaultValue");
+            }
+
+            var clientContext = field.Context as ClientContext;
+
+            taxonomyItem.ValidateNotNullOrEmpty("taxonomyItem");
+
+            var anchorTerm = taxonomyItem as Term;
+
+            if (anchorTerm != default(Term) && !anchorTerm.IsPropertyAvailable("TermSet"))
+            {
+                clientContext.Load(anchorTerm.TermSet);
+                clientContext.ExecuteQueryRetry();
+            }
+
+            var termSet = taxonomyItem is Term ? anchorTerm.TermSet : taxonomyItem as TermSet;
+
+            if (termSet == default(TermSet))
+            {
+                throw new ArgumentException("Bound TaxonomyItem must be either a TermSet or a Term");
+            }
+
+            // set the SSP ID and Term Set ID on the taxonomy field
+            var taxField = clientContext.CastTo<TaxonomyField>(field);
+
+
+            if (!termSet.IsPropertyAvailable("Terms"))
+            {
+                clientContext.Load(termSet.Terms);
+                clientContext.ExecuteQueryRetry();
+            }
+
+            Term defaultValTerm = termSet.Terms.GetByName(defaultValue);
+            if (defaultValTerm != null)
+            {
+                clientContext.Load(defaultValTerm);
+                clientContext.ExecuteQueryRetry();
+
+                taxField.DefaultValue = string.Format("-1;#{0}{1}{2}", defaultValTerm.Name, TaxonomyGuidLabelDelimiter, defaultValTerm.Id);
+                taxField.Update();
+                clientContext.ExecuteQueryRetry();
             }
         }
         #endregion

@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.SharePoint.Client;
 using OfficeDevPnP.Core.Enums;
+using OfficeDevPnP.Core.Entities;
 
 namespace OfficeDevPnP.Core.Tests.AppModelExtensions
 {
@@ -29,7 +30,7 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                     var navNode = web.Navigation.TopNavigationBar.FirstOrDefault(n => n.Title == "Test Node");
                     Assert.IsNotNull(navNode);
                     navNode.DeleteObject();
-                    clientContext.ExecuteQuery();
+                    clientContext.ExecuteQueryRetry();
                 }
             }
         }
@@ -44,7 +45,7 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                 web.AddNavigationNode("Test Node", new Uri("https://www.microsoft.com"), string.Empty, NavigationType.QuickLaunch);
 
                 clientContext.Load(web, w => w.Navigation.QuickLaunch);
-                clientContext.ExecuteQuery();
+                clientContext.ExecuteQueryRetry();
 
                 Assert.IsTrue(web.Navigation.QuickLaunch.AreItemsAvailable);
 
@@ -53,7 +54,7 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                     var navNode = web.Navigation.QuickLaunch.FirstOrDefault(n => n.Title == "Test Node");
                     Assert.IsNotNull(navNode);
                     navNode.DeleteObject();
-                    clientContext.ExecuteQuery();
+                    clientContext.ExecuteQueryRetry();
                 }
             }
         }
@@ -117,7 +118,7 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
                 web.DeleteNavigationNode("Test Node", string.Empty, NavigationType.QuickLaunch);
 
                 clientContext.Load(web, w => w.Navigation.QuickLaunch);
-                clientContext.ExecuteQuery();
+                clientContext.ExecuteQueryRetry();
 
                 if (web.Navigation.QuickLaunch.Any())
                 {
@@ -161,5 +162,6 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
             }
         }
         #endregion
+
     }
 }

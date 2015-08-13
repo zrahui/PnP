@@ -22,8 +22,7 @@ namespace Microsoft.SharePoint.Client
         /// <param name="comment">Message to be recorded with the approval</param>
         public static void ApproveFile(this Web web, string serverRelativeUrl, string comment)
         {
-            File file = null;
-            file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
+            var file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
             web.Context.Load(file, x => x.Exists, x => x.CheckOutType);
             web.Context.ExecuteQueryRetry();
 
@@ -38,22 +37,25 @@ namespace Microsoft.SharePoint.Client
         /// Checks in a file
         /// </summary>
         /// <param name="web">The web to process</param>
-        /// <param name="url">The server relative url of the file to checkin</param>
+        /// <param name="serverRelativeUrl">The server relative url of the file to checkin</param>
         /// <param name="checkinType">The type of the checkin</param>
         /// <param name="comment">Message to be recorded with the approval</param>
-        public static void CheckInFile(this Web web, string url, CheckinType checkinType, string comment)
+        public static void CheckInFile(this Web web, string serverRelativeUrl, CheckinType checkinType, string comment)
         {
-            File file = web.GetFileByServerRelativeUrl(url);
-            web.Context.Load(file, x => x.Exists, x => x.CheckOutType);
+            var file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
+
+            var scope = new ConditionalScope(web.Context, () => file.ServerObjectIsNull.Value != true && file.Exists && file.CheckOutType != CheckOutType.None);
+
+            using (scope.StartScope())
+            {
+                web.Context.Load(file);
+            }
             web.Context.ExecuteQueryRetry();
 
-            if (file.Exists)
+            if(scope.TestResult.Value)
             {
-                if (file.CheckOutType != CheckOutType.None)
-                {
-                    file.CheckIn(comment, checkinType);
-                    web.Context.ExecuteQueryRetry();
-                }
+                file.CheckIn(comment, checkinType);
+                web.Context.ExecuteQueryRetry();
             }
         }
 
@@ -61,20 +63,23 @@ namespace Microsoft.SharePoint.Client
         /// Checks out a file
         /// </summary>
         /// <param name="web">The web to process</param>
-        /// <param name="serverRelativeUrl">The server rrelative url of the file to checkout</param>
+        /// <param name="serverRelativeUrl">The server relative url of the file to checkout</param>
         public static void CheckOutFile(this Web web, string serverRelativeUrl)
         {
-            File file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
-            web.Context.Load(file, x => x.Exists, x => x.CheckOutType);
+            var file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
+
+            var scope = new ConditionalScope(web.Context, () => file.ServerObjectIsNull.Value != true && file.Exists && file.CheckOutType == CheckOutType.None);
+
+            using (scope.StartScope())
+            {
+                web.Context.Load(file);
+            }
             web.Context.ExecuteQueryRetry();
 
-            if (file.Exists)
+            if (scope.TestResult.Value)
             {
-                if (file.CheckOutType == CheckOutType.None)
-                {
-                    file.CheckOut();
-                    web.Context.ExecuteQueryRetry();
-                }
+                file.CheckOut();
+                web.Context.ExecuteQueryRetry();
             }
         }
 
@@ -109,10 +114,9 @@ namespace Microsoft.SharePoint.Client
             if (documentSetName == null) { throw new ArgumentNullException("documentSetName"); }
             if (contentTypeId == null) { throw new ArgumentNullException("contentTypeId"); }
 
-            // TODO: Check for any other illegal characters in SharePoint
-            if (documentSetName.Contains('/') || documentSetName.Contains('\\'))
+            if (documentSetName.ContainsInvalidUrlChars())
             {
-                throw new ArgumentException("The argument must be a single document set name and cannot contain path characters.", "documentSetName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_CreateDocumentSet_The_argument_must_be_a_single_document_set_name_and_cannot_contain_path_characters_, "documentSetName");
             }
 
             Log.Info(Constants.LOGGING_SOURCE, CoreResources.FieldAndContentTypeExtensions_CreateDocumentSet, documentSetName);
@@ -141,10 +145,9 @@ namespace Microsoft.SharePoint.Client
         /// </remarks>
         public static Folder CreateFolder(this Web web, string folderName)
         {
-            // TODO: Check for any other illegal characters in SharePoint
-            if (folderName.Contains('/') || folderName.Contains('\\'))
+            if (folderName.ContainsInvalidUrlChars())
             {
-                throw new ArgumentException("The argument must be a single folder name and cannot contain path characters.", "folderName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_CreateFolder_The_argument_must_be_a_single_folder_name_and_cannot_contain_path_characters_, "folderName");
             }
 
             var folderCollection = web.Folders;
@@ -168,10 +171,9 @@ namespace Microsoft.SharePoint.Client
         /// </remarks>
         public static Folder CreateFolder(this Folder parentFolder, string folderName)
         {
-            // TODO: Check for any other illegal characters in SharePoint
-            if (folderName.Contains('/') || folderName.Contains('\\'))
+            if (folderName.ContainsInvalidUrlChars())
             {
-                throw new ArgumentException("The argument must be a single folder name and cannot contain path characters.", "folderName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_CreateFolder_The_argument_must_be_a_single_folder_name_and_cannot_contain_path_characters_, "folderName");
             }
 
             var folderCollection = parentFolder.Folders;
@@ -249,10 +251,9 @@ namespace Microsoft.SharePoint.Client
         /// </remarks>
         public static Folder EnsureFolder(this Web web, string folderName)
         {
-            // TODO: Check for any other illegal characters in SharePoint
-            if (folderName.Contains('/') || folderName.Contains('\\'))
+            if (folderName.ContainsInvalidUrlChars())
             {
-                throw new ArgumentException("The argument must be a single folder name and cannot contain path characters.", "folderName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_CreateFolder_The_argument_must_be_a_single_folder_name_and_cannot_contain_path_characters_, "folderName");
             }
 
             var folderCollection = web.Folders;
@@ -273,10 +274,9 @@ namespace Microsoft.SharePoint.Client
         /// </remarks>
         public static Folder EnsureFolder(this Folder parentFolder, string folderName)
         {
-            // TODO: Check for any other illegal characters in SharePoint
-            if (folderName.Contains('/') || folderName.Contains('\\'))
+            if (folderName.ContainsInvalidUrlChars())
             {
-                throw new ArgumentException("The argument must be a single folder name and cannot contain path characters.", "folderName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_CreateFolder_The_argument_must_be_a_single_folder_name_and_cannot_contain_path_characters_, "folderName");
             }
 
             var folderCollection = parentFolder.Folders;
@@ -324,7 +324,7 @@ namespace Microsoft.SharePoint.Client
         public static Folder EnsureFolderPath(this Web web, string webRelativeUrl)
         {
             if (webRelativeUrl == null) { throw new ArgumentNullException("webRelativeUrl"); }
-            if (string.IsNullOrWhiteSpace(webRelativeUrl)) { throw new ArgumentException("Folder URL is required.", "webRelativeUrl"); }
+            if (string.IsNullOrWhiteSpace(webRelativeUrl)) { throw new ArgumentException(CoreResources.FileFolderExtensions_EnsureFolderPath_Folder_URL_is_required_, "webRelativeUrl"); }
 
             // Check if folder exists
             if (!web.IsObjectPropertyInstantiated("ServerRelativeUrl"))
@@ -478,10 +478,9 @@ namespace Microsoft.SharePoint.Client
                 throw new ArgumentNullException("folderName");
             }
 
-            // TODO: Check for any other illegal characters in SharePoint
-            if (folderName.Contains('/') || folderName.Contains('\\'))
+            if (folderName.ContainsInvalidUrlChars())
             {
-                throw new ArgumentException("The argument must be a single folder name and cannot contain path characters.", "folderName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_CreateFolder_The_argument_must_be_a_single_folder_name_and_cannot_contain_path_characters_, "folderName");
             }
 
             folderCollection.Context.Load(folderCollection);
@@ -553,8 +552,7 @@ namespace Microsoft.SharePoint.Client
         /// <param name="comment">Comment recorded with the publish action</param>
         public static void PublishFile(this Web web, string serverRelativeUrl, string comment)
         {
-            File file = null;
-            file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
+            var file = web.GetFileByServerRelativeUrl(serverRelativeUrl);
             web.Context.Load(file, x => x.Exists, x => x.CheckOutType);
             web.Context.ExecuteQueryRetry();
 
@@ -666,24 +664,24 @@ namespace Microsoft.SharePoint.Client
         /// <returns>The uploaded File, so that additional operations (such as setting properties) can be done.</returns>
         public static File UploadFile(this Folder folder, string fileName, Stream stream, bool overwriteIfExists)
         {
-           if (fileName == null) 
+            if (fileName == null)
             {
-                throw new ArgumentNullException("fileName"); 
+                throw new ArgumentNullException("fileName");
             }
 
-            if (stream == null) 
+            if (stream == null)
             {
-                throw new ArgumentNullException("stream"); 
+                throw new ArgumentNullException("stream");
             }
 
-            if (string.IsNullOrWhiteSpace(fileName)) 
+            if (string.IsNullOrWhiteSpace(fileName))
             {
-                throw new ArgumentException("Destination file name is required.", "fileName"); 
+                throw new ArgumentException(CoreResources.FileFolderExtensions_UploadFile_Destination_file_name_is_required_, "fileName");
             }
 
             if (Regex.IsMatch(fileName, REGEX_INVALID_FILE_NAME_CHARS))
             {
-                throw new ArgumentException("The argument must be a single file name and cannot contain path characters.", "fileName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_UploadFile_The_argument_must_be_a_single_file_name_and_cannot_contain_path_characters_, "fileName");
             }
 
             // Create the file
@@ -742,24 +740,24 @@ namespace Microsoft.SharePoint.Client
         /// <returns>The uploaded File, so that additional operations (such as setting properties) can be done.</returns>
         public static File UploadFileWebDav(this Folder folder, string fileName, Stream stream, bool overwriteIfExists)
         {
-            if (fileName == null) 
+            if (fileName == null)
             {
-                throw new ArgumentNullException("fileName"); 
+                throw new ArgumentNullException("fileName");
             }
 
-            if (stream == null) 
+            if (stream == null)
             {
-                throw new ArgumentNullException("stream"); 
+                throw new ArgumentNullException("stream");
             }
 
-            if (string.IsNullOrWhiteSpace(fileName)) 
+            if (string.IsNullOrWhiteSpace(fileName))
             {
-                throw new ArgumentException("Destination file name is required.", "fileName"); 
+                throw new ArgumentException(CoreResources.FileFolderExtensions_UploadFile_Destination_file_name_is_required_, "fileName");
             }
 
             if (Regex.IsMatch(fileName, REGEX_INVALID_FILE_NAME_CHARS))
             {
-                throw new ArgumentException("The argument must be a single file name and cannot contain path characters.", "fileName");
+                throw new ArgumentException(CoreResources.FileFolderExtensions_UploadFileWebDav_The_argument_must_be_a_single_file_name_and_cannot_contain_path_characters_, "fileName");
             }
 
             var serverRelativeUrl = UrlUtility.Combine(folder.ServerRelativeUrl, fileName);
@@ -805,17 +803,19 @@ namespace Microsoft.SharePoint.Client
                     folder.Context.ExecuteQueryRetry();
                 }
 
-                var fileServerRelativeUrl = UrlUtility.Combine(folder.ServerRelativeUrl, fileName);                
-                var web = folder.ListItemAllFields.ParentList.ParentWeb;                
+                var fileServerRelativeUrl = UrlUtility.Combine(folder.ServerRelativeUrl, fileName);
+                var context = folder.Context as ClientContext;
+
+                var web = context.Web;
 
                 var file = web.GetFileByServerRelativeUrl(fileServerRelativeUrl);
                 folder.Context.Load(file);
                 folder.Context.ExecuteQueryRetry();
                 return file;
             }
-            catch (Exception ex)
+            catch (ServerException sex)
             {
-                if (ex.Message == "File Not Found.")
+                if (sex.ServerErrorTypeName == "System.IO.FileNotFoundException")
                 {
                     return null;
                 }
@@ -1054,11 +1054,12 @@ namespace Microsoft.SharePoint.Client
                             l => l.EnableModeration,
                             l => l.ForceCheckout);
 
-                var checkOutRequired = parentList.ForceCheckout;
+                var checkOutRequired = false;
 
                 try
                 {
                     context.ExecuteQueryRetry();
+                    checkOutRequired = parentList.ForceCheckout;
                     publishingRequired = parentList.EnableMinorVersions; // minor versions implies that the file must be published
                     approvalRequired = parentList.EnableModeration;
                 }

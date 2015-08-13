@@ -77,6 +77,9 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
             Assert.AreNotEqual(newFile.CheckOutType, CheckOutType.None);
             Assert.AreEqual(newFile.CheckOutType, CheckOutType.Online);
 
+            // Check behavior when file does not exist...should not throw an error
+            clientContext.Web.CheckInFile(file.ServerRelativeUrl + "12345678", checkInType, commentText);
+            clientContext.Web.CheckOutFile(file.ServerRelativeUrl + "12345678");
         }
 
         [TestMethod()]
@@ -110,6 +113,11 @@ namespace OfficeDevPnP.Core.Tests.AppModelExtensions
         [TestMethod]
         public void UploadFileWebDavTest()
         {
+            if (TestCommon.AppOnlyTesting())
+            {
+                Assert.Inconclusive("Tests involving webdav are not supported when testing using app-only");
+            }
+
             var fileNameExpected = "TestFile1.png";
             var file = folder.UploadFileWebDav(fileNameExpected, TestFilePath1, true);
 
